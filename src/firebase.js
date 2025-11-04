@@ -1,23 +1,21 @@
 // Import the functions you need from the SDKs you need
-import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { initializeApp } from "firebase/app";
+import { getFirestore } from "firebase/firestore";
 
 // TODO: Add your Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID",
-  measurementId: "YOUR_MEASUREMENT_ID"
+  apiKey: "AIzaSyDUWdtnXl9bXtKJ072vPGRJL7ULdI1G3p4",
+  authDomain: "prescription-generator-7c040.firebaseapp.com",
+  projectId: "prescription-generator-7c040",
+  storageBucket: "prescription-generator-7c040.firebasestorage.app",
+  messagingSenderId: "837439043878",
+  appId: "1:837439043878:web:f47b32c5ee31f5f301a9e7",
+  measurementId: "G-8KE7TGG7SN"
 };
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
 // Initialize Cloud Firestore and get a reference to the service
-const db = getFirestore(app);
-
-export { db };
+export const db = getFirestore(app);
