@@ -1,18 +1,39 @@
 import React, { useState, useEffect } from 'react';
-import { collection, addDoc, getDocs, query, where, orderBy, updateDoc, doc } from 'firebase/firestore';
+import {
+  collection,
+  addDoc,
+  getDocs,
+  query,
+  where,
+  orderBy,
+  updateDoc,
+  doc,
+} from 'firebase/firestore';
 import { db } from './firebase';
-import { FaUser, FaPhone, FaMapMarkerAlt, FaFileMedical, FaPrescription, FaDownload, FaSearch, FaPills, FaCalendarAlt, FaHistory, FaPlusCircle } from 'react-icons/fa';
+import {
+  FaUser,
+  FaPhone,
+  FaMapMarkerAlt,
+  FaFileMedical,
+  FaPrescription,
+  FaDownload,
+  FaSearch,
+  FaPills,
+  FaCalendarAlt,
+  FaHistory,
+  FaPlusCircle,
+} from 'react-icons/fa';
 import jsPDF from 'jspdf';
 import './App.css';
 
 function App() {
-  const [view, setView] = useState('addPatient');
+  const [view, setView] = useState('searchPatient');
   const [patientData, setPatientData] = useState({
     name: '',
     address: '',
     contact: '',
     pain: '',
-    treatment: ''
+    treatment: '',
   });
   const [searchPatient, setSearchPatient] = useState('');
   const [patientHistory, setPatientHistory] = useState([]);
@@ -20,11 +41,17 @@ function App() {
   const [medicines, setMedicines] = useState([{ name: '', dose: '' }]);
   const [medicineSuggestions, setMedicineSuggestions] = useState([]);
   const [savedMedicines, setSavedMedicines] = useState([]);
+  const [patients, setPatients] = useState([]);
+  const [filteredPatients, setFilteredPatients] = useState([]);
+  const [registrationDateFilter, setRegistrationDateFilter] = useState('');
+  const [loadingPatients, setLoadingPatients] = useState(false);
 
   useEffect(() => {
     loadSavedMedicines();
+    loadPatients();
   }, []);
 
+  // Load medicines
   const loadSavedMedicines = async () => {
     try {
       const medicinesRef = collection(db, 'medicines');
@@ -35,288 +62,283 @@ function App() {
       }));
       setSavedMedicines(medicinesList);
     } catch (error) {
-      console.error('Error loading medicines:', error);
+      console.error('Error loading medicines', error);
     }
   };
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setPatientData({ ...patientData, [name]: value });
-  };
-
-  const handleSubmitPatient = async (e) => {
-    e.preventDefault();
-    try {
-      await addDoc(collection(db, 'patients'), {
-        ...patientData,
-        createdAt: new Date(),
-        prescriptions: []
-      });
-      alert('Patient added successfully!');
-      setPatientData({ name: '', address: '', contact: '', pain: '', treatment: '' });
-    } catch (error) {
-      console.error('Error adding patient:', error);
-      alert('Error adding patient');
-    }
-  };
-
-  const searchPatientByName = async () => {
-    if (!searchPatient.trim()) return;
-    try {
-      const patientsRef = collection(db, 'patients');
-      const q = query(patientsRef, where('name', '>=', searchPatient), where('name', '<=', searchPatient + '\uf8ff'));
-      const querySnapshot = await getDocs(q);
-      const patients = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setPatientHistory(patients);
-    } catch (error) {
-      console.error('Error searching patient:', error);
-    }
-  };
-
-  const selectPatient = (patient) => {
-    setSelectedPatient(patient);
-    setView('prescription');
-  };
-
-  const handleMedicineChange = (index, field, value) => {
-    const updatedMedicines = [...medicines];
-    updatedMedicines[index][field] = value;
-    setMedicines(updatedMedicines);
-
-    if (field === 'name' && value) {
-      const suggestions = savedMedicines.filter(med =>
-        med.name.toLowerCase().includes(value.toLowerCase())
+  // Load all patients (and apply optional date filter)
+  const loadPatients = async () => {
+    setLoadingPatients(true);
+    let patientsRef = collection(db, 'patients');
+    let q = query(patientsRef, orderBy('name'));
+    if (registrationDateFilter) {
+      // Firestore date filter: assumes a 'registrationDate' field of Timestamp
+      const date = new Date(registrationDateFilter);
+      date.setHours(0,0,0,0);
+      q = query(
+        patientsRef, 
+        where('registrationDate', '>=', date), 
+        where('registrationDate', '<', new Date(date.getTime() + 86400000)),
+        orderBy('name')
       );
-      setMedicineSuggestions(suggestions);
-    } else {
-      setMedicineSuggestions([]);
     }
+    const snapshot = await getDocs(q);
+    const result = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    setPatients(result);
+    setFilteredPatients(result);
+    setLoadingPatients(false);
   };
 
-  const addMedicineField = () => {
-    setMedicines([...medicines, { name: '', dose: '' }]);
-  };
-
-  const handleSubmitPrescription = async (e) => {
-    e.preventDefault();
-    if (!selectedPatient) return;
-
-    try {
-      const prescription = {
-        medicines: medicines.filter(m => m.name && m.dose),
-        date: new Date()
-      };
-
-      const patientRef = doc(db, 'patients', selectedPatient.id);
-      const updatedPrescriptions = [...(selectedPatient.prescriptions || []), prescription];
-      await updateDoc(patientRef, { prescriptions: updatedPrescriptions });
-
-      for (const medicine of prescription.medicines) {
-        const existingMedicine = savedMedicines.find(m => m.name === medicine.name);
-        if (!existingMedicine) {
-          await addDoc(collection(db, 'medicines'), { name: medicine.name });
-        }
-      }
-
-      alert('Prescription saved successfully!');
-      loadSavedMedicines();
-      setMedicines([{ name: '', dose: '' }]);
-    } catch (error) {
-      console.error('Error saving prescription:', error);
-      alert('Error saving prescription');
+  // Add patient, check mobile number uniqueness
+  const handleAddPatient = async (event) => {
+    event.preventDefault();
+    // Check mobile uniqueness
+    const q = query(collection(db, 'patients'), where('contact', '==', patientData.contact));
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      alert('Patient with this mobile number already exists.');
+      return;
     }
-  };
-
-  const downloadPrescription = () => {
-    const pdf = new jsPDF();
-    pdf.setFontSize(20);
-    pdf.text('Prescription', 105, 20, { align: 'center' });
-    pdf.setFontSize(12);
-    pdf.text(`Patient Name: ${selectedPatient.name}`, 20, 40);
-    pdf.text(`Address: ${selectedPatient.address}`, 20, 50);
-    pdf.text(`Contact: ${selectedPatient.contact}`, 20, 60);
-    pdf.text(`Date: ${new Date().toLocaleDateString()}`, 20, 70);
-    pdf.text('Medicines:', 20, 90);
-
-    let yPos = 100;
-    medicines.forEach((med, index) => {
-      if (med.name && med.dose) {
-        pdf.text(`${index + 1}. ${med.name} - ${med.dose}`, 30, yPos);
-        yPos += 10;
-      }
+    await addDoc(collection(db, 'patients'), {
+      ...patientData,
+      registrationDate: new Date(),
+      prescriptions: []
     });
-
-    pdf.save(`prescription_${selectedPatient.name}_${Date.now()}.pdf`);
+    setPatientData({ name: '', address: '', contact: '', pain: '', treatment: '' });
+    loadPatients();
+    alert('Patient added successfully.');
   };
 
+  // Search logic: live suggestions as typing (no validation) and filter in table
+  useEffect(() => {
+    if (searchPatient.trim() === '') {
+      setFilteredPatients(patients);
+    } else {
+      const lower = searchPatient.toLowerCase();
+      setFilteredPatients(
+        patients.filter(
+          p => p.name && p.name.toLowerCase().includes(lower)
+        )
+      );
+    }
+  }, [searchPatient, patients]);
+
+  // Select a patient to view history or prescribe
+  const handleSelectPatient = async (patient) => {
+    setSelectedPatient(patient);
+  };
+
+  // Responsive table rendering for patients
+  const PatientTable = ({ list }) => (
+    <div className="patient-table-wrapper">
+      <table className="patient-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Mobile</th>
+            <th>Address</th>
+            <th>Pain</th>
+            <th>Treatment</th>
+            <th>Register Date</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {list.map((p) => (
+            <tr key={p.id}>
+              <td>{p.name}</td>
+              <td>{p.contact}</td>
+              <td>{p.address}</td>
+              <td>{p.pain}</td>
+              <td>{p.treatment}</td>
+              <td>{p.registrationDate && (new Date(p.registrationDate.seconds ? p.registrationDate.seconds * 1000 : p.registrationDate)).toLocaleDateString()}</td>
+              <td>
+                <button onClick={() => handleSelectPatient(p)} className="action-btn">View/Add Prescription</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  // Add prescription
+  const handleAddPrescription = async (event) => {
+    event.preventDefault();
+    if (!selectedPatient) return;
+    const patientDoc = doc(db, 'patients', selectedPatient.id);
+    const updatedPrescriptions = [
+      ...((selectedPatient.prescriptions) || []),
+      {
+        date: new Date(),
+        medicines: medicines.filter(m => m.name)
+      }
+    ];
+    await updateDoc(patientDoc, { prescriptions: updatedPrescriptions });
+    // Update in local state
+    setSelectedPatient({...selectedPatient, prescriptions: updatedPrescriptions });
+    setMedicines([{ name: '', dose: '' }]);
+    alert('Prescription added');
+    loadPatients();
+  };
+
+  // Download button for prescription PDF
+  const downloadPrescription = (presc, pat) => {
+    const docPdf = new jsPDF();
+    docPdf.text(`Patient: ${pat.name}\nMobile: ${pat.contact}\nDate: ${new Date(presc.date.seconds ? presc.date.seconds * 1000 : presc.date).toLocaleDateString()}`, 10, 10);
+    let y = 30;
+    presc.medicines.forEach((med, i) => {
+      docPdf.text(`${i + 1}. ${med.name} - ${med.dose}`, 10, y);
+      y += 10;
+    });
+    docPdf.save(`${pat.name}_prescription_${new Date().getTime()}.pdf`);
+  };
+
+  // Medicines suggestion logic
+  const handleMedicineInput = (val) => {
+    if (!val) setMedicineSuggestions([]);
+    else setMedicineSuggestions(
+      savedMedicines.filter(m => m.name && m.name.toLowerCase().includes(val.toLowerCase()))
+    );
+  };
+
+  // Date filter change
+  const handleDateFilterChange = (e) => {
+    setRegistrationDateFilter(e.target.value);
+  };
+  useEffect(() => {
+    loadPatients();
+  }, [registrationDateFilter]);
+
+  // UI Components
   return (
     <div className="App">
-      <header className="app-header">
-        <h1><FaFileMedical /> Prescription Generator</h1>
-        <nav>
-          <button onClick={() => setView('addPatient')}><FaPlusCircle /> Add Patient</button>
-          <button onClick={() => setView('search')}><FaSearch /> Search Patient</button>
-        </nav>
-      </header>
+      <main>
+        <h2 className="title">Prescription Generator</h2>
+        <div className="nav">
+          <button onClick={() => setView('addPatient')} className={view==='addPatient'?'active-btn':''}>Add Patient</button>
+          <button onClick={() => setView('searchPatient')} className={view==='searchPatient'?'active-btn':''}>Search Patient</button>
+        </div>
 
-      <main className="app-main">
-        {view === 'addPatient' && (
-          <div className="form-container">
-            <h2><FaUser /> Add New Patient</h2>
-            <form onSubmit={handleSubmitPatient}>
-              <div className="form-group">
-                <label><FaUser /> Patient Name:</label>
-                <input
-                  type="text"
-                  name="name"
-                  value={patientData.name}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label><FaMapMarkerAlt /> Address:</label>
-                <input
-                  type="text"
-                  name="address"
-                  value={patientData.address}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label><FaPhone /> Contact:</label>
-                <input
-                  type="tel"
-                  name="contact"
-                  value={patientData.contact}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label><FaFileMedical /> Pain/Symptoms:</label>
-                <textarea
-                  name="pain"
-                  value={patientData.pain}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label><FaPrescription /> Treatment Given:</label>
-                <textarea
-                  name="treatment"
-                  value={patientData.treatment}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-              <button type="submit" className="submit-btn"><FaPlusCircle /> Add Patient</button>
-            </form>
-          </div>
+        {/* Add Patient Form */}
+        {view==='addPatient' && (
+          <form className="patient-form" onSubmit={handleAddPatient}>
+            <div className="form-row">
+              <input type="text" placeholder="Patient Name" value={patientData.name} onChange={e => setPatientData({...patientData, name: e.target.value })} required />
+              <input type="text" placeholder="Mobile Number (Primary Key)" value={patientData.contact} onChange={e => setPatientData({...patientData, contact: e.target.value })} required />
+            </div>
+            <div className="form-row">
+              <input type="text" placeholder="Address" value={patientData.address} onChange={e => setPatientData({...patientData, address: e.target.value })}/>
+              <input type="text" placeholder="Pain" value={patientData.pain} onChange={e => setPatientData({...patientData, pain: e.target.value })}/>
+            </div>
+            <input type="text" placeholder="Treatment" value={patientData.treatment} onChange={e => setPatientData({...patientData, treatment: e.target.value })}/>
+            <button type="submit">Add Patient</button>
+          </form>
         )}
 
-        {view === 'search' && (
-          <div className="search-container">
-            <h2><FaSearch /> Search Patient</h2>
-            <div className="search-box">
+        {/* Search Patient UI*/}
+        {view === 'searchPatient' && (
+          <div className="search-wrapper">
+            <div className="search-row">
               <input
                 type="text"
-                placeholder="Enter patient name..."
+                placeholder="Search patient name... (no validation, live suggestions)"
                 value={searchPatient}
-                onChange={(e) => setSearchPatient(e.target.value)}
+                onChange={e => setSearchPatient(e.target.value)}
+                className="search-input"
               />
-              <button onClick={searchPatientByName}><FaSearch /> Search</button>
-            </div>
-            <div className="patient-list">
-              {patientHistory.map(patient => (
-                <div key={patient.id} className="patient-card" onClick={() => selectPatient(patient)}>
-                  <h3><FaUser /> {patient.name}</h3>
-                  <p><FaPhone /> {patient.contact}</p>
-                  <p><FaMapMarkerAlt /> {patient.address}</p>
-                  <p><FaHistory /> Prescriptions: {patient.prescriptions?.length || 0}</p>
+              {/* Suggestions dropdown, always visible if typing */}
+              {searchPatient && (
+                <div className="suggestion-list">
+                  {filteredPatients.map((p, i) => (
+                    <div key={p.id} className="suggestion-item" onClick={() => setSearchPatient(p.name)}>
+                      {p.name}
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
+              <input type="date" value={registrationDateFilter} onChange={handleDateFilterChange} className="date-filter" />
             </div>
+
+            {/* Responsive row/table format for all patients, showing all at start */}
+            {loadingPatients ? (
+              <div>Loading Patients...</div>
+            ) : (
+              <PatientTable list={filteredPatients} />
+            )}
           </div>
         )}
 
-        {view === 'prescription' && selectedPatient && (
-          <div className="prescription-container">
-            <h2><FaPrescription /> Generate Prescription</h2>
-            <div className="patient-info">
-              <h3><FaUser /> {selectedPatient.name}</h3>
-              <p><FaPhone /> {selectedPatient.contact}</p>
-              <p><FaMapMarkerAlt /> {selectedPatient.address}</p>
-            </div>
-            <form onSubmit={handleSubmitPrescription}>
-              <h3><FaPills /> Medicines</h3>
-              {medicines.map((medicine, index) => (
-                <div key={index} className="medicine-input">
-                  <div className="form-group">
-                    <label>Medicine Name:</label>
+        {/* Prescription and history for selected patient */}
+        {selectedPatient && (
+          <div className="selected-patient-wrapper">
+            <h3>Patient: {selectedPatient.name}</h3>
+            <form className="prescription-form" onSubmit={handleAddPrescription}>
+              <div className="medicine-fields">
+                {medicines.map((med, idx) => (
+                  <div key={idx} className="medicine-row">
                     <input
                       type="text"
-                      value={medicine.name}
-                      onChange={(e) => handleMedicineChange(index, 'name', e.target.value)}
-                      required
+                      placeholder="Medicine name"
+                      value={med.name}
+                      onChange={e => {
+                        let meds = [...medicines];
+                        meds[idx].name = e.target.value;
+                        setMedicines(meds);
+                        handleMedicineInput(e.target.value);
+                      }}
                     />
-                    {medicineSuggestions.length > 0 && (
-                      <div className="suggestions">
-                        {medicineSuggestions.map((sug, i) => (
-                          <div
-                            key={i}
-                            className="suggestion-item"
-                            onClick={() => {
-                              handleMedicineChange(index, 'name', sug.name);
-                              setMedicineSuggestions([]);
-                            }}
-                          >
-                            {sug.name}
-                          </div>
+                    {/* Medicine suggestions dropdown */}
+                    {medicineSuggestions.length > 0 && idx === medicines.length -1 && (
+                      <div className="suggestions-dropdown">
+                        {medicineSuggestions.map((sug,i) => (
+                          <div key={i} className="suggestion-item" onClick={() => {
+                            let meds = [...medicines];
+                            meds[idx].name = sug.name;
+                            setMedicines(meds);
+                            setMedicineSuggestions([]);
+                          }}>{sug.name}</div>
                         ))}
                       </div>
                     )}
-                  </div>
-                  <div className="form-group">
-                    <label>Dosage:</label>
                     <input
                       type="text"
-                      value={medicine.dose}
-                      onChange={(e) => handleMedicineChange(index, 'dose', e.target.value)}
-                      placeholder="e.g., 1-0-1 or 2 times daily"
-                      required
+                      placeholder="Dosage (e.g. 1-0-1)"
+                      value={med.dose}
+                      onChange={e => {
+                        let meds = [...medicines];
+                        meds[idx].dose = e.target.value;
+                        setMedicines(meds);
+                      }}
                     />
                   </div>
-                </div>
-              ))}
-              <button type="button" onClick={addMedicineField} className="add-medicine-btn">
-                <FaPlusCircle /> Add Another Medicine
-              </button>
-              <div className="action-buttons">
-                <button type="submit" className="submit-btn"><FaPrescription /> Save Prescription</button>
-                <button type="button" onClick={downloadPrescription} className="download-btn">
-                  <FaDownload /> Download Prescription
-                </button>
+                ))}
+                <button type="button" onClick={() => setMedicines([...medicines, { name: '', dose: '' }])} className="add-medicine-btn"><FaPlusCircle /> Add Another Medicine</button>
               </div>
+              <button type="submit" className="submit-btn"><FaPrescription /> Save Prescription</button>
             </form>
+            {/* Patient history in row/table format with download buttons */}
             {selectedPatient.prescriptions && selectedPatient.prescriptions.length > 0 && (
               <div className="prescription-history">
                 <h3><FaHistory /> Prescription History</h3>
-                {selectedPatient.prescriptions.map((presc, index) => (
-                  <div key={index} className="history-item">
-                    <p><FaCalendarAlt /> {new Date(presc.date.seconds * 1000).toLocaleDateString()}</p>
-                    <ul>
-                      {presc.medicines.map((med, i) => (
-                        <li key={i}>{med.name} - {med.dose}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
+                <table className="history-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Medicines</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedPatient.prescriptions.map((presc, idx) => (
+                      <tr key={idx}>
+                        <td>{new Date(presc.date.seconds ? presc.date.seconds * 1000 : presc.date).toLocaleDateString()}</td>
+                        <td>{presc.medicines.map(m => `${m.name} (${m.dose})`).join(', ')}</td>
+                        <td><button className="download-btn" onClick={() => downloadPrescription(presc, selectedPatient)}><FaDownload /> Download</button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
