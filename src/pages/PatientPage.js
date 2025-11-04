@@ -78,24 +78,39 @@ const PatientPage = () => {
     }
   };
 
+  const resetPatientFields = () => {
+    setSelectedPatient(null);
+    setFirstName('');
+    setLastName('');
+    setAddress('');
+    setMobile('');
+    setShowAddPatient(false);
+    setSelectedPain('');
+    setSelectedTreatment('');
+  };
+
   const searchPatient = async (mobile) => {
-    if (mobile.length >= 3) {
-      const patient = patients.find(p => p.mobile === mobile);
-      if (patient) {
-        setSelectedPatient(patient);
-        setFirstName(patient.firstName);
-        setLastName(patient.lastName);
-        setAddress(patient.address);
-        setMobile(patient.mobile);
-        setShowAddPatient(false);
-      } else {
-        setShowAddPatient(true);
-        setSelectedPatient(null);
-        setFirstName('');
-        setLastName('');
-        setAddress('');
-        setMobile(mobile);
-      }
+    if (mobile.length < 3) {
+      // Reset all patient-related fields when search is cleared or too short
+      resetPatientFields();
+      return;
+    }
+
+    const patient = patients.find(p => p.mobile === mobile);
+    if (patient) {
+      setSelectedPatient(patient);
+      setFirstName(patient.firstName);
+      setLastName(patient.lastName);
+      setAddress(patient.address);
+      setMobile(patient.mobile);
+      setShowAddPatient(false);
+    } else {
+      setShowAddPatient(true);
+      setSelectedPatient(null);
+      setFirstName('');
+      setLastName('');
+      setAddress('');
+      setMobile(mobile);
     }
   };
 
@@ -108,6 +123,7 @@ const PatientPage = () => {
         mobile,
         createdAt: new Date().toISOString(),
       };
+
       const docRef = await addDoc(collection(db, 'patients'), patientData);
       setSelectedPatient({ id: docRef.id, ...patientData });
       fetchPatients();
@@ -122,6 +138,7 @@ const PatientPage = () => {
       alert('Please add or search for a patient first');
       return;
     }
+
     if (!selectedPatient) {
       savePatient();
     }
@@ -150,6 +167,7 @@ const PatientPage = () => {
         medicines: prescriptionItems,
         createdAt: new Date().toISOString(),
       };
+
       await addDoc(collection(db, 'prescriptions'), prescriptionData);
       alert('Prescription saved successfully!');
       generatePDF();
@@ -160,6 +178,7 @@ const PatientPage = () => {
 
   const generatePDF = () => {
     const doc = new jsPDF();
+    
     doc.setFontSize(20);
     doc.text('Prescription', 105, 20, { align: 'center' });
     
@@ -184,7 +203,7 @@ const PatientPage = () => {
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Typography variant="h3" gutterBottom align="center" color="primary">
+      <Typography variant="h3" align="center" gutterBottom color="primary">
         Patient Management
       </Typography>
 
@@ -204,6 +223,11 @@ const PatientPage = () => {
             <TextField {...params} label="Search by Mobile Number" fullWidth />
           )}
         />
+        {mobileNumber.length >= 3 && patients.length === 0 && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+            No patients found in the database.
+          </Typography>
+        )}
       </Paper>
 
       {(showAddPatient || selectedPatient) && (
