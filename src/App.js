@@ -1,39 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import {
-  collection,
-  addDoc,
-  getDocs,
-  query,
-  where,
-  orderBy,
-  updateDoc,
-  doc,
-} from 'firebase/firestore';
+import React, { useState, useEffect, useRef } from 'react';
+import { collection, addDoc, getDocs, query, where, orderBy, updateDoc, doc } from 'firebase/firestore';
 import { db } from './firebase';
-import {
-  FaUser,
-  FaPhone,
-  FaMapMarkerAlt,
-  FaFileMedical,
-  FaPrescription,
-  FaDownload,
-  FaSearch,
-  FaPills,
-  FaCalendarAlt,
-  FaHistory,
-  FaPlusCircle,
-} from 'react-icons/fa';
+import { FaUser, FaPhone, FaMapMarkerAlt, FaFileMedical, FaPrescription, FaDownload, FaSearch, FaPills, FaCalendarAlt, FaHistory, FaPlusCircle } from 'react-icons/fa';
 import jsPDF from 'jspdf';
 import './App.css';
+
 function App() {
   const [view, setView] = useState('searchPatient');
-  const [patientData, setPatientData] = useState({
-    name: '',
-    address: '',
-    contact: '',
-    pain: '',
-    treatment: '',
-  });
+  const [patientData, setPatientData] = useState({ name: '', address: '', contact: '', pain: '', treatment: '' });
   const [searchPatient, setSearchPatient] = useState('');
   const [patientHistory, setPatientHistory] = useState([]);
   const [selectedPatient, setSelectedPatient] = useState(null);
@@ -44,31 +18,37 @@ function App() {
   const [filteredPatients, setFilteredPatients] = useState([]);
   const [registrationDateFilter, setRegistrationDateFilter] = useState('');
   const [loadingPatients, setLoadingPatients] = useState(false);
+
+  // Dose dropdown feature
+  const [doseDropdown, setDoseDropdown] = useState([]); // Store all doses entered
+  const [newDoseInput, setNewDoseInput] = useState('');
+
+  // Debounce handling for search optimization
+  const debounceTimer = useRef(null);
+
   useEffect(() => {
     loadSavedMedicines();
     loadPatients();
   }, []);
+
   // Load medicines
   const loadSavedMedicines = async () => {
     try {
       const medicinesRef = collection(db, 'medicines');
       const medicinesSnapshot = await getDocs(medicinesRef);
-      const medicinesList = medicinesSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const medicinesList = medicinesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setSavedMedicines(medicinesList);
     } catch (error) {
       console.error('Error loading medicines', error);
     }
   };
+
   // Load all patients (and apply optional date filter)
   const loadPatients = async () => {
     setLoadingPatients(true);
     let patientsRef = collection(db, 'patients');
     let q = query(patientsRef, orderBy('name'));
     if (registrationDateFilter) {
-      // Firestore date filter: assumes a 'registrationDate' field of Timestamp
       const date = new Date(registrationDateFilter);
       date.setHours(0,0,0,0);
       q = query(
@@ -84,7 +64,43 @@ function App() {
     setFilteredPatients(result);
     setLoadingPatients(false);
   };
-  // Add patient, check mobile number uniqueness
+
+  // Improved filtering logic with debounce
+  useEffect(() => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      let input = '';
+      if (view === 'addPatient') {
+        input = patientData.contact.trim();
+      } else {
+        input = searchPatient.trim();
+      }
+
+      if (input === '') {
+        setFilteredPatients(patients);
+      } else {
+        const isMobileNumberInput = /^[0-9]+$/.test(input);
+        let matches;
+        // Allow partial match and quick results (lower computation)
+        if (isMobileNumberInput) {
+          matches = patients.filter(
+            p => p.contact && p.contact.includes(input)
+                || p.name && p.name.toLowerCase().includes(input)
+          );
+        } else {
+          const lower = input.toLowerCase();
+          matches = patients.filter(
+            p => p.name && p.name.toLowerCase().includes(lower)
+                || p.contact && p.contact.includes(lower)
+          );
+        }
+        setFilteredPatients(matches.length === 0 ? patients : matches);
+      }
+    }, 250); // Lower debounce delay for snappier UX
+    return () => clearTimeout(debounceTimer.current);
+  }, [searchPatient, patientData.contact, patients, view]);
+
+  // Add patient, check mobile number uniqueness and allow suggestion fill
   const handleAddPatient = async (event) => {
     event.preventDefault();
     // Check mobile uniqueness
@@ -103,47 +119,23 @@ function App() {
     loadPatients();
     alert('Patient added successfully.');
   };
-  // Custom patient filtering logic for both search and add patient screens
-  useEffect(() => {
-    // If either patientData.contact (add form) or searchPatient (search form) has input
-    let input = '';
-    if (view === 'addPatient') {
-      input = patientData.contact.trim();
-    } else {
-      input = searchPatient.trim();
-    }
-    if (input === '') {
-      setFilteredPatients(patients); // If empty, show all
-    } else {
-      const isMobileNumberInput = /^[0-9]+$/.test(input);
-      // If pure number input, show all until a match
-      if (isMobileNumberInput) {
-        const matches = patients.filter(
-          p => p.contact && p.contact.includes(input)
-        );
-        if (matches.length === 0 || input.length < 1) {
-          setFilteredPatients(patients);
-        } else {
-          setFilteredPatients(matches);
-        }
-      } else {
-        // normal search by name
-        const lower = input.toLowerCase();
-        const matches = patients.filter(
-          p => p.name && p.name.toLowerCase().includes(lower)
-        );
-        if (matches.length === 0 || input.length < 1) {
-          setFilteredPatients(patients);
-        } else {
-          setFilteredPatients(matches);
-        }
-      }
-    }
-  }, [searchPatient, patientData.contact, patients, view]);
+
+  // Fill Add Patient from suggestion
+  const fillPatientFromSuggestion = (p) => {
+    setPatientData({
+      name: p.name || '',
+      address: p.address || '',
+      contact: p.contact || '',
+      pain: p.pain || '',
+      treatment: p.treatment || '',
+    });
+  };
+
   // Select a patient to view history or prescribe
   const handleSelectPatient = async (patient) => {
     setSelectedPatient(patient);
   };
+
   // Responsive table rendering for patients
   const PatientTable = ({ list }) => (
     <div className="patient-table-wrapper">
@@ -169,7 +161,9 @@ function App() {
               <td>{p.treatment}</td>
               <td>{p.registrationDate && (new Date(p.registrationDate.seconds ? p.registrationDate.seconds * 1000 : p.registrationDate)).toLocaleDateString()}</td>
               <td>
-                <button onClick={() => handleSelectPatient(p)} className="action-btn">View/Add Prescription</button>
+                <button className="action-btn" onClick={() => handleSelectPatient(p)}>
+                  View/Add Prescription
+                </button>
               </td>
             </tr>
           ))}
@@ -177,6 +171,7 @@ function App() {
       </table>
     </div>
   );
+
   // Add prescription
   const handleAddPrescription = async (event) => {
     event.preventDefault();
@@ -190,12 +185,12 @@ function App() {
       }
     ];
     await updateDoc(patientDoc, { prescriptions: updatedPrescriptions });
-    // Update in local state
     setSelectedPatient({...selectedPatient, prescriptions: updatedPrescriptions });
     setMedicines([{ name: '', dose: '' }]);
     alert('Prescription added');
     loadPatients();
   };
+
   // Download button for prescription PDF
   const downloadPrescription = (presc, pat) => {
     const docPdf = new jsPDF();
@@ -207,6 +202,7 @@ function App() {
     });
     docPdf.save(`${pat.name}_prescription_${new Date().getTime()}.pdf`);
   };
+
   // Medicines suggestion logic
   const handleMedicineInput = (val) => {
     if (!val) setMedicineSuggestions([]);
@@ -214,6 +210,15 @@ function App() {
       savedMedicines.filter(m => m.name && m.name.toLowerCase().includes(val.toLowerCase()))
     );
   };
+
+  // Dose entry and dropdown handling
+  const handleAddDose = () => {
+    if (newDoseInput && !doseDropdown.includes(newDoseInput)) {
+      setDoseDropdown([...doseDropdown, newDoseInput]);
+      setNewDoseInput('');
+    }
+  };
+
   // Date filter change
   const handleDateFilterChange = (e) => {
     setRegistrationDateFilter(e.target.value);
@@ -221,55 +226,83 @@ function App() {
   useEffect(() => {
     loadPatients();
   }, [registrationDateFilter]);
+
   // UI Components
   return (
     <div className="App">
       <main>
         <h2 className="title">Prescription Generator</h2>
         <div className="nav">
-          <button onClick={() => setView('addPatient')} className={view==='addPatient'?'active-btn':''}>Add Patient</button>
-          <button onClick={() => setView('searchPatient')} className={view==='searchPatient'?'active-btn':''}>Search Patient</button>
+          <button
+            className={view === 'addPatient' ? 'active-btn' : ''}
+            onClick={() => setView('addPatient')}
+          >
+            Add Patient
+          </button>
+          <button
+            className={view === 'searchPatient' ? 'active-btn' : ''}
+            onClick={() => setView('searchPatient')}
+          >
+            Search Patient
+          </button>
         </div>
         {/* Add Patient Form */}
-        {view==='addPatient' && (
+        {view === 'addPatient' && (
           <form className="patient-form" onSubmit={handleAddPatient}>
             <div className="form-row">
               <input
                 placeholder="Patient Name"
                 type="text"
                 value={patientData.name}
-                onChange={e => setPatientData({...patientData, name: e.target.value })}
+                onChange={e => setPatientData({ ...patientData, name: e.target.value })}
                 required
               />
-              <input
-                placeholder="Mobile Number (Primary Key)"
-                type="text"
-                value={patientData.contact}
-                onChange={e => setPatientData({...patientData, contact: e.target.value })}
-                required
-              />
+              {/* MOBILE NUMBER WITH SUGGESTION DROPDOWN */}
+              <div style={{ position: 'relative' }}>
+                <input
+                  placeholder="Mobile Number (Primary Key)"
+                  type="text"
+                  value={patientData.contact}
+                  onChange={e => setPatientData({ ...patientData, contact: e.target.value })}
+                  required
+                />
+                {/* Suggestions dropdown for patient mobile/name during Add */}
+                {patientData.contact && filteredPatients.length > 0 && (
+                  <div className="suggestion-list" style={{ position: 'absolute', top: '100%', left: 0, zIndex: 2, background: '#fff', width: '100%' }}>
+                    {filteredPatients.map((p, i) => (
+                      <div
+                        className="suggestion-item"
+                        key={p.id}
+                        style={{ cursor: 'pointer', padding: '4px' }}
+                        onClick={() => fillPatientFromSuggestion(p)}
+                      >
+                        {p.name} ({p.contact})
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <div className="form-row">
               <input
                 placeholder="Address"
                 type="text"
                 value={patientData.address}
-                onChange={e => setPatientData({...patientData, address: e.target.value })}
+                onChange={e => setPatientData({ ...patientData, address: e.target.value })}
               />
               <input
                 placeholder="Pain"
                 type="text"
                 value={patientData.pain}
-                onChange={e => setPatientData({...patientData, pain: e.target.value })}
+                onChange={e => setPatientData({ ...patientData, pain: e.target.value })}
               />
             </div>
             <input
               placeholder="Treatment"
               type="text"
               value={patientData.treatment}
-              onChange={e => setPatientData({...patientData, treatment: e.target.value })}
+              onChange={e => setPatientData({ ...patientData, treatment: e.target.value })}
             />
-            {/* Patient Table below add fields (shows filteredPatients) */}
             <PatientTable list={filteredPatients} />
             <button type="submit">Add Patient</button>
           </form>
@@ -285,7 +318,6 @@ function App() {
                 onChange={e => setSearchPatient(e.target.value)}
                 className="search-input"
               />
-              {/* Suggestions dropdown, always visible if typing */}
               {searchPatient && (
                 <div className="suggestion-list">
                   {filteredPatients.map((p, i) => (
@@ -295,11 +327,11 @@ function App() {
                   ))}
                 </div>
               )}
-              <input className="date-filter" onChange={handleDateFilterChange} type="date" value={registrationDateFilter}/>
+              <input className="date-filter" type="date" value={registrationDateFilter} onChange={handleDateFilterChange} />
             </div>
             {/* Patient Table below search (shows filteredPatients) */}
             {loadingPatients ? (
-              <div>Loading Patients...</div>
+              <p>Loading Patients...</p>
             ) : (
               <PatientTable list={filteredPatients} />
             )}
@@ -308,7 +340,7 @@ function App() {
         {/* Prescription and history for selected patient */}
         {selectedPatient && (
           <div className="selected-patient-wrapper">
-            Patient: {selectedPatient.name}
+            <div>Patient: {selectedPatient.name}</div>
             <form className="prescription-form" onSubmit={handleAddPrescription}>
               <div className="medicine-fields">
                 {medicines.map((med, idx) => (
@@ -325,62 +357,59 @@ function App() {
                       }}
                     />
                     {/* Medicine suggestions dropdown */}
-                    {medicineSuggestions.length > 0 && idx === medicines.length -1 && (
+                    {medicineSuggestions.length > 0 && idx === medicines.length - 1 && (
                       <div className="suggestions-dropdown">
-                        {medicineSuggestions.map((sug,i) => (
+                        {medicineSuggestions.map((sug, i) => (
                           <div className="suggestion-item" key={i} onClick={() => {
                             let meds = [...medicines];
                             meds[idx].name = sug.name;
                             setMedicines(meds);
                             setMedicineSuggestions([]);
-                          }}>{sug.name}</div>
+                          }}>
+                            {sug.name}
+                          </div>
                         ))}
                       </div>
                     )}
-                    <input
-                      type="text"
-                      placeholder="Dosage (e.g. 1-0-1)"
-                      value={med.dose}
-                      onChange={e => {
-                        let meds = [...medicines];
-                        meds[idx].dose = e.target.value;
-                        setMedicines(meds);
-                      }}
-                    />
+                    {/* Dose input and dropdown */}
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        placeholder="Dosage (e.g. 1-0-1)"
+                        value={med.dose}
+                        onChange={e => {
+                          let meds = [...medicines];
+                          meds[idx].dose = e.target.value;
+                          setMedicines(meds);
+                          setNewDoseInput(e.target.value);
+                        }}
+                        list={`dose-dropdown-${idx}`}
+                      />
+                      <button type="button" style={{ marginLeft: 4 }} onClick={handleAddDose}>
+                        Add Dose
+                      </button>
+                      <select
+                        style={{ marginLeft: 4 }}
+                        value={med.dose}
+                        onChange={e => {
+                          let meds = [...medicines];
+                          meds[idx].dose = e.target.value;
+                          setMedicines(meds);
+                        }}
+                      >
+                        <option value="">Select dose</option>
+                        {doseDropdown.map((d, i) => (
+                          <option key={i} value={d}>{d}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 ))}
-                <button type="button" onClick={() => setMedicines([...medicines, { name: '', dose: '' }])} className="add-medicine-btn"> Add Another Medicine</button>
+                <button type="button" className="add-medicine-btn" onClick={() => setMedicines([...medicines, { name: '', dose: '' }])}>Add Another Medicine</button>
               </div>
-              <button className="submit-btn" type="submit"> Save Prescription</button>
+              <button className="submit-btn" type="submit">Save Prescription</button>
             </form>
             {/* Patient history in row/table format with download buttons */}
             {selectedPatient.prescriptions && selectedPatient.prescriptions.length > 0 && (
               <div className="prescription-history">
-                 Prescription History
-                <table className="history-table">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Medicines</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedPatient.prescriptions.map((presc, idx) => (
-                      <tr key={idx}>
-                        <td>{new Date(presc.date.seconds ? presc.date.seconds * 1000 : presc.date).toLocaleDateString()}</td>
-                        <td>{presc.medicines.map(m => `${m.name} (${m.dose})`).join(', ')}</td>
-                        <td><button className="download-btn" onClick={() => downloadPrescription(presc, selectedPatient)}> Download</button></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-      </main>
-    </div>
-  );
-}
-export default App;
+                <div>
