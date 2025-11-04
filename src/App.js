@@ -25,7 +25,6 @@ import {
 } from 'react-icons/fa';
 import jsPDF from 'jspdf';
 import './App.css';
-
 function App() {
   const [view, setView] = useState('searchPatient');
   const [patientData, setPatientData] = useState({
@@ -45,12 +44,10 @@ function App() {
   const [filteredPatients, setFilteredPatients] = useState([]);
   const [registrationDateFilter, setRegistrationDateFilter] = useState('');
   const [loadingPatients, setLoadingPatients] = useState(false);
-
   useEffect(() => {
     loadSavedMedicines();
     loadPatients();
   }, []);
-
   // Load medicines
   const loadSavedMedicines = async () => {
     try {
@@ -65,7 +62,6 @@ function App() {
       console.error('Error loading medicines', error);
     }
   };
-
   // Load all patients (and apply optional date filter)
   const loadPatients = async () => {
     setLoadingPatients(true);
@@ -88,7 +84,6 @@ function App() {
     setFilteredPatients(result);
     setLoadingPatients(false);
   };
-
   // Add patient, check mobile number uniqueness
   const handleAddPatient = async (event) => {
     event.preventDefault();
@@ -108,26 +103,47 @@ function App() {
     loadPatients();
     alert('Patient added successfully.');
   };
-
-  // Search logic: live suggestions as typing (no validation) and filter in table
+  // Custom patient filtering logic for both search and add patient screens
   useEffect(() => {
-    if (searchPatient.trim() === '') {
-      setFilteredPatients(patients);
+    // If either patientData.contact (add form) or searchPatient (search form) has input
+    let input = '';
+    if (view === 'addPatient') {
+      input = patientData.contact.trim();
     } else {
-      const lower = searchPatient.toLowerCase();
-      setFilteredPatients(
-        patients.filter(
-          p => p.name && p.name.toLowerCase().includes(lower)
-        )
-      );
+      input = searchPatient.trim();
     }
-  }, [searchPatient, patients]);
-
+    if (input === '') {
+      setFilteredPatients(patients); // If empty, show all
+    } else {
+      const isMobileNumberInput = /^[0-9]+$/.test(input);
+      // If pure number input, show all until a match
+      if (isMobileNumberInput) {
+        const matches = patients.filter(
+          p => p.contact && p.contact.includes(input)
+        );
+        if (matches.length === 0 || input.length < 1) {
+          setFilteredPatients(patients);
+        } else {
+          setFilteredPatients(matches);
+        }
+      } else {
+        // normal search by name
+        const lower = input.toLowerCase();
+        const matches = patients.filter(
+          p => p.name && p.name.toLowerCase().includes(lower)
+        );
+        if (matches.length === 0 || input.length < 1) {
+          setFilteredPatients(patients);
+        } else {
+          setFilteredPatients(matches);
+        }
+      }
+    }
+  }, [searchPatient, patientData.contact, patients, view]);
   // Select a patient to view history or prescribe
   const handleSelectPatient = async (patient) => {
     setSelectedPatient(patient);
   };
-
   // Responsive table rendering for patients
   const PatientTable = ({ list }) => (
     <div className="patient-table-wrapper">
@@ -161,7 +177,6 @@ function App() {
       </table>
     </div>
   );
-
   // Add prescription
   const handleAddPrescription = async (event) => {
     event.preventDefault();
@@ -181,7 +196,6 @@ function App() {
     alert('Prescription added');
     loadPatients();
   };
-
   // Download button for prescription PDF
   const downloadPrescription = (presc, pat) => {
     const docPdf = new jsPDF();
@@ -193,7 +207,6 @@ function App() {
     });
     docPdf.save(`${pat.name}_prescription_${new Date().getTime()}.pdf`);
   };
-
   // Medicines suggestion logic
   const handleMedicineInput = (val) => {
     if (!val) setMedicineSuggestions([]);
@@ -201,7 +214,6 @@ function App() {
       savedMedicines.filter(m => m.name && m.name.toLowerCase().includes(val.toLowerCase()))
     );
   };
-
   // Date filter change
   const handleDateFilterChange = (e) => {
     setRegistrationDateFilter(e.target.value);
@@ -209,7 +221,6 @@ function App() {
   useEffect(() => {
     loadPatients();
   }, [registrationDateFilter]);
-
   // UI Components
   return (
     <div className="App">
@@ -219,30 +230,57 @@ function App() {
           <button onClick={() => setView('addPatient')} className={view==='addPatient'?'active-btn':''}>Add Patient</button>
           <button onClick={() => setView('searchPatient')} className={view==='searchPatient'?'active-btn':''}>Search Patient</button>
         </div>
-
         {/* Add Patient Form */}
         {view==='addPatient' && (
           <form className="patient-form" onSubmit={handleAddPatient}>
             <div className="form-row">
-              <input type="text" placeholder="Patient Name" value={patientData.name} onChange={e => setPatientData({...patientData, name: e.target.value })} required />
-              <input type="text" placeholder="Mobile Number (Primary Key)" value={patientData.contact} onChange={e => setPatientData({...patientData, contact: e.target.value })} required />
+              <input
+                placeholder="Patient Name"
+                type="text"
+                value={patientData.name}
+                onChange={e => setPatientData({...patientData, name: e.target.value })}
+                required
+              />
+              <input
+                placeholder="Mobile Number (Primary Key)"
+                type="text"
+                value={patientData.contact}
+                onChange={e => setPatientData({...patientData, contact: e.target.value })}
+                required
+              />
             </div>
             <div className="form-row">
-              <input type="text" placeholder="Address" value={patientData.address} onChange={e => setPatientData({...patientData, address: e.target.value })}/>
-              <input type="text" placeholder="Pain" value={patientData.pain} onChange={e => setPatientData({...patientData, pain: e.target.value })}/>
+              <input
+                placeholder="Address"
+                type="text"
+                value={patientData.address}
+                onChange={e => setPatientData({...patientData, address: e.target.value })}
+              />
+              <input
+                placeholder="Pain"
+                type="text"
+                value={patientData.pain}
+                onChange={e => setPatientData({...patientData, pain: e.target.value })}
+              />
             </div>
-            <input type="text" placeholder="Treatment" value={patientData.treatment} onChange={e => setPatientData({...patientData, treatment: e.target.value })}/>
+            <input
+              placeholder="Treatment"
+              type="text"
+              value={patientData.treatment}
+              onChange={e => setPatientData({...patientData, treatment: e.target.value })}
+            />
+            {/* Patient Table below add fields (shows filteredPatients) */}
+            <PatientTable list={filteredPatients} />
             <button type="submit">Add Patient</button>
           </form>
         )}
-
         {/* Search Patient UI*/}
         {view === 'searchPatient' && (
           <div className="search-wrapper">
             <div className="search-row">
               <input
                 type="text"
-                placeholder="Search patient name... (no validation, live suggestions)"
+                placeholder="Search patient name or mobile... (live, no validation)"
                 value={searchPatient}
                 onChange={e => setSearchPatient(e.target.value)}
                 className="search-input"
@@ -251,16 +289,15 @@ function App() {
               {searchPatient && (
                 <div className="suggestion-list">
                   {filteredPatients.map((p, i) => (
-                    <div key={p.id} className="suggestion-item" onClick={() => setSearchPatient(p.name)}>
+                    <div className="suggestion-item" key={p.id} onClick={() => setSearchPatient(p.name)}>
                       {p.name}
                     </div>
                   ))}
                 </div>
               )}
-              <input type="date" value={registrationDateFilter} onChange={handleDateFilterChange} className="date-filter" />
+              <input className="date-filter" onChange={handleDateFilterChange} type="date" value={registrationDateFilter}/>
             </div>
-
-            {/* Responsive row/table format for all patients, showing all at start */}
+            {/* Patient Table below search (shows filteredPatients) */}
             {loadingPatients ? (
               <div>Loading Patients...</div>
             ) : (
@@ -268,15 +305,14 @@ function App() {
             )}
           </div>
         )}
-
         {/* Prescription and history for selected patient */}
         {selectedPatient && (
           <div className="selected-patient-wrapper">
-            <h3>Patient: {selectedPatient.name}</h3>
+            Patient: {selectedPatient.name}
             <form className="prescription-form" onSubmit={handleAddPrescription}>
               <div className="medicine-fields">
                 {medicines.map((med, idx) => (
-                  <div key={idx} className="medicine-row">
+                  <div className="medicine-row" key={idx}>
                     <input
                       type="text"
                       placeholder="Medicine name"
@@ -292,7 +328,7 @@ function App() {
                     {medicineSuggestions.length > 0 && idx === medicines.length -1 && (
                       <div className="suggestions-dropdown">
                         {medicineSuggestions.map((sug,i) => (
-                          <div key={i} className="suggestion-item" onClick={() => {
+                          <div className="suggestion-item" key={i} onClick={() => {
                             let meds = [...medicines];
                             meds[idx].name = sug.name;
                             setMedicines(meds);
@@ -313,14 +349,14 @@ function App() {
                     />
                   </div>
                 ))}
-                <button type="button" onClick={() => setMedicines([...medicines, { name: '', dose: '' }])} className="add-medicine-btn"><FaPlusCircle /> Add Another Medicine</button>
+                <button type="button" onClick={() => setMedicines([...medicines, { name: '', dose: '' }])} className="add-medicine-btn"> Add Another Medicine</button>
               </div>
-              <button type="submit" className="submit-btn"><FaPrescription /> Save Prescription</button>
+              <button className="submit-btn" type="submit"> Save Prescription</button>
             </form>
             {/* Patient history in row/table format with download buttons */}
             {selectedPatient.prescriptions && selectedPatient.prescriptions.length > 0 && (
               <div className="prescription-history">
-                <h3><FaHistory /> Prescription History</h3>
+                 Prescription History
                 <table className="history-table">
                   <thead>
                     <tr>
@@ -334,7 +370,7 @@ function App() {
                       <tr key={idx}>
                         <td>{new Date(presc.date.seconds ? presc.date.seconds * 1000 : presc.date).toLocaleDateString()}</td>
                         <td>{presc.medicines.map(m => `${m.name} (${m.dose})`).join(', ')}</td>
-                        <td><button className="download-btn" onClick={() => downloadPrescription(presc, selectedPatient)}><FaDownload /> Download</button></td>
+                        <td><button className="download-btn" onClick={() => downloadPrescription(presc, selectedPatient)}> Download</button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -347,5 +383,4 @@ function App() {
     </div>
   );
 }
-
 export default App;
