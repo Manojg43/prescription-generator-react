@@ -7,7 +7,6 @@ import {
   Button,
   Box,
   Grid,
-  Autocomplete,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -89,14 +88,13 @@ const PatientPage = () => {
     setSelectedTreatment('');
   };
 
-  const searchPatient = async (mobile) => {
-    if (mobile.length < 3) {
-      // Reset all patient-related fields when search is cleared or too short
+  const handleSearchPatient = () => {
+    if (mobileNumber.length < 3) {
       resetPatientFields();
       return;
     }
 
-    const patient = patients.find(p => p.mobile === mobile);
+    const patient = patients.find(p => p.mobile === mobileNumber);
     if (patient) {
       setSelectedPatient(patient);
       setFirstName(patient.firstName);
@@ -110,7 +108,7 @@ const PatientPage = () => {
       setFirstName('');
       setLastName('');
       setAddress('');
-      setMobile(mobile);
+      setMobile(mobileNumber);
     }
   };
 
@@ -142,6 +140,7 @@ const PatientPage = () => {
     if (!selectedPatient) {
       savePatient();
     }
+
     setShowPrescription(true);
   };
 
@@ -203,7 +202,7 @@ const PatientPage = () => {
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Typography variant="h3" align="center" gutterBottom color="primary">
+      <Typography variant="h3" align="center" color="primary" gutterBottom>
         Patient Management
       </Typography>
 
@@ -211,18 +210,21 @@ const PatientPage = () => {
         <Typography variant="h5" gutterBottom>
           Search Patient
         </Typography>
-        <Autocomplete
-          freeSolo
-          options={patients.map(p => p.mobile)}
-          value={mobileNumber}
-          onInputChange={(e, newValue) => {
-            setMobileNumber(newValue);
-            searchPatient(newValue);
-          }}
-          renderInput={(params) => (
-            <TextField {...params} label="Search by Mobile Number" fullWidth />
-          )}
-        />
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <TextField
+            fullWidth
+            label="Search by Mobile Number"
+            value={mobileNumber}
+            onChange={(e) => setMobileNumber(e.target.value)}
+          />
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleSearchPatient}
+          >
+            Search
+          </Button>
+        </Box>
         {mobileNumber.length >= 3 && patients.length === 0 && (
           <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
             No patients found in the database.
@@ -275,7 +277,10 @@ const PatientPage = () => {
             <Grid item xs={12} md={6}>
               <FormControl fullWidth>
                 <InputLabel>Pain</InputLabel>
-                <Select value={selectedPain} onChange={(e) => setSelectedPain(e.target.value)}>
+                <Select
+                  value={selectedPain}
+                  onChange={(e) => setSelectedPain(e.target.value)}
+                >
                   {pains.map((pain) => (
                     <MenuItem key={pain.id} value={pain.name}>{pain.name}</MenuItem>
                   ))}
@@ -285,7 +290,10 @@ const PatientPage = () => {
             <Grid item xs={12} md={6}>
               <FormControl fullWidth>
                 <InputLabel>Treatment</InputLabel>
-                <Select value={selectedTreatment} onChange={(e) => setSelectedTreatment(e.target.value)}>
+                <Select
+                  value={selectedTreatment}
+                  onChange={(e) => setSelectedTreatment(e.target.value)}
+                >
                   {treatments.map((treatment) => (
                     <MenuItem key={treatment.id} value={treatment.name}>{treatment.name}</MenuItem>
                   ))}
@@ -293,7 +301,8 @@ const PatientPage = () => {
               </FormControl>
             </Grid>
           </Grid>
-          <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
+
+          <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
             {!selectedPatient && (
               <Button variant="contained" onClick={savePatient}>
                 Save Patient
@@ -314,7 +323,10 @@ const PatientPage = () => {
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth>
                   <InputLabel>Medicine</InputLabel>
-                  <Select value={selectedMedicine} onChange={(e) => setSelectedMedicine(e.target.value)}>
+                  <Select
+                    value={selectedMedicine}
+                    onChange={(e) => setSelectedMedicine(e.target.value)}
+                  >
                     {medicines.map((medicine) => (
                       <MenuItem key={medicine.id} value={medicine.name}>{medicine.name}</MenuItem>
                     ))}
@@ -324,7 +336,10 @@ const PatientPage = () => {
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth>
                   <InputLabel>Dose</InputLabel>
-                  <Select value={selectedDose} onChange={(e) => setSelectedDose(e.target.value)}>
+                  <Select
+                    value={selectedDose}
+                    onChange={(e) => setSelectedDose(e.target.value)}
+                  >
                     {doses.map((dose) => (
                       <MenuItem key={dose.id} value={dose.name}>{dose.name}</MenuItem>
                     ))}
@@ -337,6 +352,7 @@ const PatientPage = () => {
                 </Button>
               </Grid>
             </Grid>
+
             <Box sx={{ mt: 2 }}>
               {prescriptionItems.map((item, index) => (
                 <Chip
@@ -351,7 +367,7 @@ const PatientPage = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setShowPrescription(false)}>Cancel</Button>
-          <Button onClick={savePrescription} variant="contained">
+          <Button variant="contained" onClick={savePrescription}>
             Save & Generate PDF
           </Button>
         </DialogActions>
