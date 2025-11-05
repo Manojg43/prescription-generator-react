@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Container,
   Paper,
@@ -9,221 +9,138 @@ import {
   List,
   ListItem,
   ListItemText,
-  IconButton,
-  Divider,
-  Grid,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Grid
 } from '@mui/material';
-import DeleteIcon from '@mui/icons-material/Delete';
-import { collection, addDoc, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { collection, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
 const DoctorAdminPage = () => {
-  const [treatment, setTreatment] = useState('');
-  const [pain, setPain] = useState('');
-  const [medicine, setMedicine] = useState('');
-  const [dose, setDose] = useState('');
+  const [openDialog, setOpenDialog] = useState(false);
+  const [selectedTable, setSelectedTable] = useState('');
+  const [formData, setFormData] = useState({});
 
-  const [treatments, setTreatments] = useState([]);
-  const [pains, setPains] = useState([]);
-  const [medicines, setMedicines] = useState([]);
-  const [doses, setDoses] = useState([]);
+  const tables = [
+    { name: 'patients', fields: ['name', 'email', 'phone', 'age', 'gender', 'address'] },
+    { name: 'prescriptions', fields: ['patientId', 'doctorId', 'date', 'diagnosis', 'medicines', 'instructions'] },
+    { name: 'pains', fields: ['name', 'description', 'severity'] },
+    { name: 'treatments', fields: ['name', 'description', 'duration', 'cost'] },
+    { name: 'doctors', fields: ['name', 'email', 'phone', 'specialization', 'experience', 'qualification'] }
+  ];
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const handleTableClick = (table) => {
+    setSelectedTable(table.name);
+    const initialFormData = {};
+    table.fields.forEach(field => {
+      initialFormData[field] = '';
+    });
+    setFormData(initialFormData);
+    setOpenDialog(true);
+  };
 
-  const fetchData = async () => {
+  const handleCloseDialog = () => {
+    setOpenDialog(false);
+    setSelectedTable('');
+    setFormData({});
+  };
+
+  const handleFieldChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleSubmit = async () => {
     try {
-      const treatmentsSnapshot = await getDocs(collection(db, 'treatments'));
-      setTreatments(treatmentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-
-      const painsSnapshot = await getDocs(collection(db, 'pains'));
-      setPains(painsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-
-      const medicinesSnapshot = await getDocs(collection(db, 'medicines'));
-      setMedicines(medicinesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-
-      const dosesSnapshot = await getDocs(collection(db, 'doses'));
-      setDoses(dosesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      await addDoc(collection(db, selectedTable), formData);
+      alert(`Successfully added to ${selectedTable}`);
+      handleCloseDialog();
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('Error adding document: ', error);
+      alert('Error adding document: ' + error.message);
     }
   };
 
-  const addTreatment = async () => {
-    if (treatment.trim()) {
-      try {
-        await addDoc(collection(db, 'treatments'), { name: treatment });
-        setTreatment('');
-        fetchData();
-      } catch (error) {
-        console.error('Error adding treatment:', error);
-      }
-    }
+  const getCurrentFields = () => {
+    const table = tables.find(t => t.name === selectedTable);
+    return table ? table.fields : [];
   };
-
-  const addPain = async () => {
-    if (pain.trim()) {
-      try {
-        await addDoc(collection(db, 'pains'), { name: pain });
-        setPain('');
-        fetchData();
-      } catch (error) {
-        console.error('Error adding pain:', error);
-      }
-    }
-  };
-
-  const addMedicine = async () => {
-    if (medicine.trim()) {
-      try {
-        await addDoc(collection(db, 'medicines'), { name: medicine });
-        setMedicine('');
-        fetchData();
-      } catch (error) {
-        console.error('Error adding medicine:', error);
-      }
-    }
-  };
-
-  const addDose = async () => {
-    if (dose.trim()) {
-      try {
-        await addDoc(collection(db, 'doses'), { name: dose });
-        setDose('');
-        fetchData();
-      } catch (error) {
-        console.error('Error adding dose:', error);
-      }
-    }
-  };
-
-  const deleteItem = async (collectionName, id) => {
-    try {
-      await deleteDoc(doc(db, collectionName, id));
-      fetchData();
-    } catch (error) {
-      console.error('Error deleting item:', error);
-    }
-  };
-
-  const renderList = (title, items, collectionName) => (
-    <Box sx={{ mb: 3 }}>
-      <Typography variant="h6" gutterBottom>
-        {title}
-      </Typography>
-      <List sx={{ bgcolor: 'background.paper', borderRadius: 1 }}>
-        {items.map((item) => (
-          <ListItem
-            key={item.id}
-            secondaryAction={
-              <IconButton edge="end" onClick={() => deleteItem(collectionName, item.id)}>
-                <DeleteIcon />
-              </IconButton>
-            }
-          >
-            <ListItemText primary={item.name} />
-          </ListItem>
-        ))}
-      </List>
-    </Box>
-  );
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Typography variant="h3" gutterBottom align="center" color="primary">
-        Doctor / Admin Configuration
-      </Typography>
-      
-      <Grid container spacing={3}>
-        {/* Treatments Section */}
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h5" gutterBottom>
-              Treatments
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-              <TextField
-                fullWidth
-                label="Add Treatment"
-                value={treatment}
-                onChange={(e) => setTreatment(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && addTreatment()}
+    <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
+      <Paper elevation={3} sx={{ p: 4 }}>
+        <Typography variant="h4" gutterBottom align="center">
+          Admin Table Editor
+        </Typography>
+        <Typography variant="body1" gutterBottom align="center" sx={{ mb: 3 }}>
+          Click on a table name to add new records
+        </Typography>
+        
+        <List>
+          {tables.map((table) => (
+            <ListItem
+              key={table.name}
+              button
+              onClick={() => handleTableClick(table)}
+              sx={{
+                border: '1px solid #e0e0e0',
+                borderRadius: 1,
+                mb: 1,
+                '&:hover': {
+                  backgroundColor: '#f5f5f5'
+                }
+              }}
+            >
+              <ListItemText
+                primary={
+                  <Typography variant="h6" sx={{ textTransform: 'capitalize' }}>
+                    {table.name}
+                  </Typography>
+                }
+                secondary={`Fields: ${table.fields.join(', ')}`}
               />
-              <Button variant="contained" onClick={addTreatment}>
-                Add
-              </Button>
-            </Box>
-            {renderList('Available Treatments', treatments, 'treatments')}
-          </Paper>
-        </Grid>
+            </ListItem>
+          ))}
+        </List>
+      </Paper>
 
-        {/* Pains Section */}
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h5" gutterBottom>
-              Pains
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-              <TextField
-                fullWidth
-                label="Add Pain"
-                value={pain}
-                onChange={(e) => setPain(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && addPain()}
-              />
-              <Button variant="contained" onClick={addPain}>
-                Add
-              </Button>
-            </Box>
-            {renderList('Available Pains', pains, 'pains')}
-          </Paper>
-        </Grid>
-
-        {/* Medicines Section */}
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h5" gutterBottom>
-              Medicines
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-              <TextField
-                fullWidth
-                label="Add Medicine"
-                value={medicine}
-                onChange={(e) => setMedicine(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && addMedicine()}
-              />
-              <Button variant="contained" onClick={addMedicine}>
-                Add
-              </Button>
-            </Box>
-            {renderList('Available Medicines', medicines, 'medicines')}
-          </Paper>
-        </Grid>
-
-        {/* Doses Section */}
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h5" gutterBottom>
-              Doses
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-              <TextField
-                fullWidth
-                label="Add Dose"
-                value={dose}
-                onChange={(e) => setDose(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && addDose()}
-              />
-              <Button variant="contained" onClick={addDose}>
-                Add
-              </Button>
-            </Box>
-            {renderList('Available Doses', doses, 'doses')}
-          </Paper>
-        </Grid>
-      </Grid>
+      <Dialog
+        open={openDialog}
+        onClose={handleCloseDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ textTransform: 'capitalize' }}>
+          Add New {selectedTable} Record
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2 }}>
+            <Grid container spacing={2}>
+              {getCurrentFields().map((field) => (
+                <Grid item xs={12} key={field}>
+                  <TextField
+                    fullWidth
+                    label={field.charAt(0).toUpperCase() + field.slice(1)}
+                    value={formData[field] || ''}
+                    onChange={(e) => handleFieldChange(field, e.target.value)}
+                    variant="outlined"
+                  />
+                </Grid>
+              ))}
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDialog}>Cancel</Button>
+          <Button onClick={handleSubmit} variant="contained" color="primary">
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };
