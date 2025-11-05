@@ -16,7 +16,6 @@ import {
 import { styled } from '@mui/material/styles';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-// import logo from '../assets/logo.png'; // Placeholder - add your logo path
 
 const PrescriptionContainer = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(4),
@@ -24,6 +23,7 @@ const PrescriptionContainer = styled(Paper)(({ theme }) => ({
   margin: '0 auto',
   backgroundColor: '#ffffff',
   boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+  fontFamily: 'Arial, sans-serif',
 }));
 
 const Header = styled(Box)(({ theme }) => ({
@@ -32,244 +32,168 @@ const Header = styled(Box)(({ theme }) => ({
   alignItems: 'center',
   marginBottom: theme.spacing(3),
   paddingBottom: theme.spacing(2),
-  borderBottom: '2px solid #1976d2',
-}));
-
-const LogoContainer = styled(Box)({
-  width: '80px',
-  height: '80px',
-  backgroundColor: '#f5f5f5',
-  border: '2px dashed #ccc',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  borderRadius: '8px',
-});
-
-const DoctorInfo = styled(Box)(({ theme }) => ({
-  textAlign: 'right',
-  '& h5': {
-    color: '#1976d2',
-    fontWeight: 700,
-    marginBottom: theme.spacing(0.5),
-  },
-  '& p': {
-    margin: theme.spacing(0.3, 0),
-    fontSize: '0.9rem',
-    color: '#555',
-  },
-}));
-
-const PatientInfo = styled(Box)(({ theme }) => ({
-  backgroundColor: '#f8f9fa',
+  borderBottom: '3px solid #2196f3',
+  backgroundColor: '#e3f2fd',
   padding: theme.spacing(2),
-  borderRadius: theme.spacing(1),
-  marginBottom: theme.spacing(3),
+  borderRadius: '8px',
 }));
 
-const Section = styled(Box)(({ theme }) => ({
+const InfoSection = styled(Box)(({ theme }) => ({
   marginBottom: theme.spacing(3),
+  padding: theme.spacing(2),
+  backgroundColor: '#f5f5f5',
+  borderRadius: '8px',
+  border: '1px solid #e0e0e0',
 }));
 
 const StyledTableCell = styled(TableCell)(({ theme }) => ({
-  fontWeight: 600,
-  backgroundColor: '#1976d2',
-  color: theme.palette.common.white,
-  fontSize: '1rem',
+  fontWeight: 'bold',
+  backgroundColor: '#2196f3',
+  color: '#ffffff',
+  fontSize: '14px',
+  padding: theme.spacing(1.5),
+  fontFamily: 'Arial, sans-serif',
 }));
 
 const StyledTableRow = styled(TableRow)(({ theme }) => ({
   '&:nth-of-type(odd)': {
-    backgroundColor: theme.palette.action.hover,
+    backgroundColor: '#f9f9f9',
   },
-  '& td': {
-    fontSize: '0.95rem',
-    padding: theme.spacing(1.5),
+  '&:hover': {
+    backgroundColor: '#e3f2fd',
   },
-}));
-
-const Footer = styled(Box)(({ theme }) => ({
-  marginTop: theme.spacing(4),
-  paddingTop: theme.spacing(2),
-  borderTop: '1px solid #ddd',
-  textAlign: 'right',
 }));
 
 const PrescriptionPdf = ({ prescriptionData }) => {
-  const prescriptionRef = useRef();
+  const pdfRef = useRef();
 
-  // Default prescription data structure
-  const defaultData = {
-    doctor: {
-      name: 'Dr. John Smith',
-      qualification: 'MBBS, MD',
-      specialization: 'General Physician',
-      registration: 'MCI Reg. No: 12345',
-      contact: 'Phone: +91-9876543210',
-      email: 'Email: drsmith@example.com',
-      address: '123 Medical Center, City, State - 123456',
-    },
-    patient: {
-      name: 'Patient Name',
-      age: '35',
-      gender: 'Male',
-      date: new Date().toLocaleDateString(),
-      id: 'P-2025-001',
-    },
-    medicines: [
-      {
-        medicineName: 'Paracetamol 500mg',
-        dosage: '1-0-1',
-        duration: '5 Days',
-      },
-      {
-        medicineName: 'Amoxicillin 250mg',
-        dosage: '1-1-1',
-        duration: '7 Days',
-      },
-      {
-        medicineName: 'Vitamin D3',
-        dosage: '0-0-1',
-        duration: '30 Days',
-      },
-    ],
-    diagnosis: 'Common Cold, Vitamin D Deficiency',
-    instructions: 'Take medicines after meals. Drink plenty of water. Rest adequately.',
-    followUp: 'Follow up after 7 days if symptoms persist.',
-  };
+  const generatePdf = async () => {
+    const element = pdfRef.current;
+    const canvas = await html2canvas(element, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+    });
 
-  const data = prescriptionData || defaultData;
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
+    });
 
-  // PDF Generation Function with OCR-ready text
-  const generatePDF = async () => {
-    const element = prescriptionRef.current;
-    if (!element) return;
+    const imgWidth = 210;
+    const pageHeight = 297;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    let heightLeft = imgHeight;
+    let position = 0;
 
-    try {
-      // Configure html2canvas for better text rendering
-      const canvas = await html2canvas(element, {
-        scale: 2, // Higher scale for better quality
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        // Use SVG rendering for better text quality
-        allowTaint: false,
-      });
+    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
 
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
-      });
-
-      const imgWidth = 210; // A4 width in mm
-      const pageHeight = 297; // A4 height in mm
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      // Add first page
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
       pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
       heightLeft -= pageHeight;
-
-      // Add additional pages if content exceeds one page
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
-
-      // Add text layer for OCR (invisible overlay)
-      // This makes the PDF searchable and OCR-friendly
-      pdf.setTextColor(255, 255, 255); // White text (invisible on white background)
-      pdf.setFontSize(1);
-      
-      // Save the PDF
-      const fileName = `Prescription_${data.patient.name.replace(/\s+/g, '_')}_${data.patient.date.replace(/\//g, '-')}.pdf`;
-      pdf.save(fileName);
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-      alert('Failed to generate PDF. Please try again.');
     }
+
+    pdf.save(`prescription_${prescriptionData?.patientName || 'patient'}_${Date.now()}.pdf`);
   };
 
   return (
-    <Box sx={{ padding: 4, backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
-      <Box sx={{ textAlign: 'center', marginBottom: 3 }}>
-        <Button
-          variant="contained"
-          color="primary"
-          size="large"
-          onClick={generatePDF}
-          sx={{ marginBottom: 2 }}
-        >
-          Download Prescription as PDF
-        </Button>
-      </Box>
-
-      <PrescriptionContainer ref={prescriptionRef}>
-        {/* Header Section */}
+    <Box sx={{ p: 2 }}>
+      <PrescriptionContainer ref={pdfRef} elevation={3}>
+        {/* Header with Logo Placeholder */}
         <Header>
-          <LogoContainer>
-            {/* <img src={logo} alt="Logo" style={{ maxWidth: '100%', maxHeight: '100%' }} /> */}
-            <Typography variant="caption" color="textSecondary">
-              LOGO
+          <Box>
+            <Box
+              sx={{
+                width: 60,
+                height: 60,
+                backgroundColor: '#2196f3',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 1,
+              }}
+            >
+              <Typography variant="h4" sx={{ color: '#ffffff', fontWeight: 'bold' }}>
+                Rx
+              </Typography>
+            </Box>
+          </Box>
+          <Box sx={{ textAlign: 'right' }}>
+            <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#1976d2', fontFamily: 'Arial, sans-serif' }}>
+              Medical Prescription
             </Typography>
-          </LogoContainer>
-          <DoctorInfo>
-            <Typography variant="h5">{data.doctor.name}</Typography>
-            <Typography>{data.doctor.qualification}</Typography>
-            <Typography>{data.doctor.specialization}</Typography>
-            <Typography variant="body2">{data.doctor.registration}</Typography>
-            <Typography variant="body2">{data.doctor.contact}</Typography>
-            <Typography variant="body2">{data.doctor.email}</Typography>
-            <Typography variant="body2" sx={{ marginTop: 1 }}>
-              {data.doctor.address}
+            <Typography variant="body2" sx={{ color: '#666', fontFamily: 'Arial, sans-serif' }}>
+              {new Date().toLocaleDateString('en-IN', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              })}
             </Typography>
-          </DoctorInfo>
+          </Box>
         </Header>
 
-        <Divider sx={{ marginBottom: 3 }} />
+        {/* Doctor Information */}
+        <InfoSection>
+          <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#1976d2', marginBottom: 1, fontFamily: 'Arial, sans-serif' }}>
+            Doctor Information
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={6}>
+              <Typography variant="body1" sx={{ fontFamily: 'Arial, sans-serif' }}>
+                <strong>Dr. {prescriptionData?.doctorName || 'Doctor Name'}</strong>
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#666', fontFamily: 'Arial, sans-serif' }}>
+                {prescriptionData?.doctorSpecialization || 'Specialization'}
+              </Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="body2" sx={{ fontFamily: 'Arial, sans-serif' }}>
+                <strong>Registration No:</strong> {prescriptionData?.doctorRegNo || 'XXX-XXXX'}
+              </Typography>
+              <Typography variant="body2" sx={{ fontFamily: 'Arial, sans-serif' }}>
+                <strong>Contact:</strong> {prescriptionData?.doctorContact || 'XXXXXXXXXX'}
+              </Typography>
+            </Grid>
+          </Grid>
+        </InfoSection>
 
         {/* Patient Information */}
-        <PatientInfo>
-          <Typography variant="h6" gutterBottom sx={{ color: '#1976d2', fontWeight: 700 }}>
+        <InfoSection>
+          <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#1976d2', marginBottom: 1, fontFamily: 'Arial, sans-serif' }}>
             Patient Information
           </Typography>
           <Grid container spacing={2}>
             <Grid item xs={6}>
-              <Typography><strong>Name:</strong> {data.patient.name}</Typography>
-            </Grid>
-            <Grid item xs={3}>
-              <Typography><strong>Age:</strong> {data.patient.age}</Typography>
-            </Grid>
-            <Grid item xs={3}>
-              <Typography><strong>Gender:</strong> {data.patient.gender}</Typography>
-            </Grid>
-            <Grid item xs={6}>
-              <Typography><strong>Patient ID:</strong> {data.patient.id}</Typography>
+              <Typography variant="body2" sx={{ fontFamily: 'Arial, sans-serif' }}>
+                <strong>Name:</strong> {prescriptionData?.patientName || 'Patient Name'}
+              </Typography>
+              <Typography variant="body2" sx={{ fontFamily: 'Arial, sans-serif' }}>
+                <strong>Age/Gender:</strong> {prescriptionData?.patientAge || 'XX'} years / {prescriptionData?.patientGender || 'Gender'}
+              </Typography>
             </Grid>
             <Grid item xs={6}>
-              <Typography><strong>Date:</strong> {data.patient.date}</Typography>
+              <Typography variant="body2" sx={{ fontFamily: 'Arial, sans-serif' }}>
+                <strong>Patient ID:</strong> {prescriptionData?.patientId || 'XXXXXX'}
+              </Typography>
+              <Typography variant="body2" sx={{ fontFamily: 'Arial, sans-serif' }}>
+                <strong>Date:</strong> {prescriptionData?.date || new Date().toLocaleDateString('en-IN')}
+              </Typography>
             </Grid>
           </Grid>
-        </PatientInfo>
+        </InfoSection>
 
-        {/* Diagnosis Section */}
-        <Section>
-          <Typography variant="h6" gutterBottom sx={{ color: '#1976d2', fontWeight: 700 }}>
-            Diagnosis
-          </Typography>
-          <Typography variant="body1" sx={{ padding: 2, backgroundColor: '#f8f9fa', borderRadius: 1 }}>
-            {data.diagnosis}
-          </Typography>
-        </Section>
+        <Divider sx={{ my: 3 }} />
 
-        {/* Medicines Table */}
-        <Section>
-          <Typography variant="h6" gutterBottom sx={{ color: '#1976d2', fontWeight: 700 }}>
+        {/* Medicine Table with 3 Columns: Medicine Name, Dosage, Duration */}
+        <Box sx={{ marginBottom: 3 }}>
+          <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#1976d2', marginBottom: 2, fontFamily: 'Arial, sans-serif' }}>
             Prescribed Medicines
           </Typography>
           <TableContainer component={Paper} elevation={2}>
@@ -282,55 +206,87 @@ const PrescriptionPdf = ({ prescriptionData }) => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {data.medicines.map((medicine, index) => (
-                  <StyledTableRow key={index}>
-                    <TableCell>{medicine.medicineName}</TableCell>
-                    <TableCell>{medicine.dosage}</TableCell>
-                    <TableCell>{medicine.duration}</TableCell>
+                {prescriptionData?.medicines && prescriptionData.medicines.length > 0 ? (
+                  prescriptionData.medicines.map((medicine, index) => (
+                    <StyledTableRow key={index}>
+                      <TableCell sx={{ fontFamily: 'Arial, sans-serif', fontSize: '13px' }}>
+                        {medicine.name || 'Medicine Name'}
+                      </TableCell>
+                      <TableCell sx={{ fontFamily: 'Arial, sans-serif', fontSize: '13px' }}>
+                        {medicine.dosage || 'Dosage'}
+                      </TableCell>
+                      <TableCell sx={{ fontFamily: 'Arial, sans-serif', fontSize: '13px' }}>
+                        {medicine.duration || 'Duration'}
+                      </TableCell>
+                    </StyledTableRow>
+                  ))
+                ) : (
+                  <StyledTableRow>
+                    <TableCell colSpan={3} align="center" sx={{ fontFamily: 'Arial, sans-serif', fontSize: '13px', color: '#999' }}>
+                      No medicines prescribed
+                    </TableCell>
                   </StyledTableRow>
-                ))}
+                )}
               </TableBody>
             </Table>
           </TableContainer>
-        </Section>
+        </Box>
 
-        {/* Instructions Section */}
-        <Section>
-          <Typography variant="h6" gutterBottom sx={{ color: '#1976d2', fontWeight: 700 }}>
-            Instructions
+        {/* Advice Section */}
+        <InfoSection>
+          <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#1976d2', marginBottom: 1, fontFamily: 'Arial, sans-serif' }}>
+            Medical Advice
           </Typography>
-          <Typography variant="body1" sx={{ padding: 2, backgroundColor: '#f8f9fa', borderRadius: 1 }}>
-            {data.instructions}
+          <Typography variant="body2" sx={{ whiteSpace: 'pre-line', fontFamily: 'Arial, sans-serif', lineHeight: 1.6 }}>
+            {prescriptionData?.advice || 'No specific advice provided. Follow the prescribed medication schedule and consult if symptoms persist.'}
           </Typography>
-        </Section>
+        </InfoSection>
 
-        {/* Follow-up Section */}
-        <Section>
-          <Typography variant="h6" gutterBottom sx={{ color: '#1976d2', fontWeight: 700 }}>
-            Follow-up
-          </Typography>
-          <Typography variant="body1" sx={{ padding: 2, backgroundColor: '#fff3cd', borderRadius: 1 }}>
-            {data.followUp}
-          </Typography>
-        </Section>
+        <Divider sx={{ my: 3 }} />
 
-        {/* Footer with Doctor's Signature */}
-        <Footer>
-          <Box sx={{ display: 'inline-block', textAlign: 'center' }}>
-            <Box sx={{ borderTop: '2px solid #333', paddingTop: 1, minWidth: '200px' }}>
-              <Typography variant="body1" sx={{ fontWeight: 700 }}>
-                {data.doctor.name}
+        {/* Doctor Signature */}
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+          <Box sx={{ textAlign: 'center' }}>
+            <Box
+              sx={{
+                borderTop: '2px solid #000',
+                width: '200px',
+                marginBottom: 1,
+                paddingTop: 1,
+              }}
+            >
+              <Typography variant="body2" sx={{ fontWeight: 'bold', fontFamily: 'Arial, sans-serif' }}>
+                Dr. {prescriptionData?.doctorName || 'Doctor Name'}
               </Typography>
-              <Typography variant="body2" color="textSecondary">
-                {data.doctor.qualification}
-              </Typography>
-              <Typography variant="caption" color="textSecondary">
-                Doctor's Signature
+              <Typography variant="caption" sx={{ color: '#666', fontFamily: 'Arial, sans-serif' }}>
+                {prescriptionData?.doctorSpecialization || 'Specialization'}
               </Typography>
             </Box>
+            <Typography variant="caption" sx={{ fontFamily: 'Arial, sans-serif' }}>
+              Doctor's Signature
+            </Typography>
           </Box>
-        </Footer>
+        </Box>
+
+        {/* Footer */}
+        <Box sx={{ marginTop: 4, textAlign: 'center', borderTop: '1px solid #e0e0e0', paddingTop: 2 }}>
+          <Typography variant="caption" sx={{ color: '#999', fontFamily: 'Arial, sans-serif' }}>
+            This is a digitally generated prescription. For any queries, please contact the clinic.
+          </Typography>
+        </Box>
       </PrescriptionContainer>
+
+      <Box sx={{ textAlign: 'center', marginTop: 3 }}>
+        <Button
+          variant="contained"
+          color="primary"
+          size="large"
+          onClick={generatePdf}
+          sx={{ fontFamily: 'Arial, sans-serif', textTransform: 'none' }}
+        >
+          Download Prescription PDF
+        </Button>
+      </Box>
     </Box>
   );
 };
